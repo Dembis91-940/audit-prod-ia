@@ -994,12 +994,12 @@ a{transition:color .3s ease}
     d.style.background='radial-gradient(circle,'+orbs[i]+',transparent 60%)';o.appendChild(d);}
   document.body.appendChild(o);
   addEventListener('scroll',function(){var h=document.documentElement;var sc=(h.scrollTop||document.body.scrollTop);var m=h.scrollHeight-h.clientHeight;p.style.width=(m>0?(sc/m*100):0)+'%';},{passive:true});
-  var sel=null;
+  var sel=".hero,.douleurs,.fonctionnement,.benefices,.offres,.essai,.faq";
   if(!sel)return;
   var els=document.querySelectorAll(sel);
   if(!('IntersectionObserver' in window)){for(var i=0;i<els.length;i++)els[i].classList.add('f3-in');return;}
   for(var i=0;i<els.length;i++)els[i].classList.add('f3-reveal');
-  var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add('f3-in');io.unobserve(en.target);}});},{threshold:.1});
+  var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting||en.target.getBoundingClientRect().top<innerHeight){en.target.classList.add('f3-in');io.unobserve(en.target);}});},{threshold:.1});
   for(var i=0;i<els.length;i++)io.observe(els[i]);
 })();
 </script></body>
