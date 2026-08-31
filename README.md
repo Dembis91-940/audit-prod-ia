@@ -47,6 +47,29 @@ Cabinet de productivité IA : audit en ligne gratuit, formules d'abonnement pour
 - **Export PDF** : bouton « Exporter le rapport » → `window.print()` avec rapport dédié (en-tête, score, tableau des 5 axes, chiffres clés, plan d'action, mentions).
 - **Recevoir le rapport par email** : formulaire nom + email → EmailJS (template `template_xpo58cv`).
 
+## Suivi mensuel maintenant réel (offre Pro)
+
+La lacune critique « suivi mensuel promis par l'offre Pro » est **comblée** via le
+portail client multi-business (`agentia-portail`, mission V6 + ProdIA) :
+
+1. **Compte client** : chaque client a un espace sécurisé (auth JWT) dans le portail,
+   business `prodia` (couleur or `#d4a017`, module `audits`).
+2. **Outil connecté** : l'outil d'audit est servi par le portail sur `/audit` (même origine,
+   token partagé). Après le score, le client connecté voit **« Enregistrer dans mon espace »**
+   → sa snapshot (score, axes, gains €, coût, ROI, plan 30-60-90) est sauvegardée en base
+   (`audit_snapshots`) via `POST /api/audits`. Les visiteurs sans compte gardent le formulaire
+   EmailJS inchangé.
+3. **Courbe d'évolution réelle** : pages « Mes audits » + « Évolution » — courbe du score /100,
+   barres des gains €, ROI, et delta vs le mois précédent (Chart.js, données 100 % base).
+4. **Multi-sites** (Business 69 €) : champ `site_name` par audit + sélecteur de site dans le
+   portail (`GET /api/audits/history?site=`).
+5. **Paiement** : bloc d'offres 19/39/69 € prêt pour Stripe Billing, **non activé** (feu vert requis).
+
+Démo : `sophie@atelier-dupont.fr` / `client1234` dans le portail local
+(`http://127.0.0.1:8000`) — 3 audits réels à des dates différentes (01/08, 15/08, 31/08)
+→ courbe montante 54 → 71 → 78, gains 8 960 → 16 800 €/an, ROI ×6,2 → ×10.
+Capture vente : `screenshots/evolution-score.png`.
+
 ---
 
 ## Intégrations

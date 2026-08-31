@@ -208,6 +208,13 @@ header{position:sticky;top:4px;z-index:60;background:rgba(250,247,240,.92);backd
 .report-err.show{display:block}
 .report-ok{display:none;background:#e8f3ec;border:1px solid #a8cfb8;color:#1e5c3c;border-radius:9px;padding:11px 13px;font-size:13.5px;margin-top:12px}
 .report-ok.show{display:block}
+.save-box{max-width:520px;margin:26px auto 0;background:linear-gradient(135deg,var(--ivoire-fonce),#fff);border:1.5px solid var(--or);border-radius:14px;padding:26px 26px 22px;box-shadow:0 14px 40px var(--ombre-or)}
+.save-box .save-inner b{font-size:16px;display:block;margin-bottom:6px}
+.save-box .sub{font-size:13.5px;color:var(--discret);margin-bottom:16px}
+.save-box .row{display:flex;flex-direction:column;gap:10px}
+.save-box input{width:100%;border:1.5px solid var(--filet-petrole);background:var(--blanc);border-radius:9px;padding:11px 13px;font-size:14.5px;color:var(--encre);font-family:'Inter',sans-serif;outline:none;min-width:0}
+.save-box input:focus{border-color:var(--or);box-shadow:0 0 0 3px rgba(212,160,23,.18)}
+@media (min-width:560px){.save-box .row{flex-direction:row;align-items:center}.save-box .row input{flex:1}}
 
 /* ---------- Footer ---------- */
 footer{background:var(--petrole-nuit);color:rgba(250,247,240,.75);border-top:3px solid transparent;border-image:linear-gradient(90deg,var(--or-fonce),var(--or-clair),var(--or-fonce)) 1;padding:44px 0 36px}
@@ -398,7 +405,21 @@ footer{background:var(--petrole-nuit);color:rgba(250,247,240,.75);border-top:3px
           <button class="btn btn-gold-outline" id="btnEmail">Recevoir le rapport par email</button>
           <button class="btn btn-outline" id="btnRestart">Recommencer l'audit</button>
         </div>
-        <p class="res-note">Astuce : « Exporter le rapport » ouvre la boîte d'impression — choisissez « Enregistrer en PDF ».</p>
+        <p class="res-note" id="resNote">Astuce : « Exporter le rapport » ouvre la boîte d'impression — choisissez « Enregistrer en PDF ».</p>
+
+        <!-- Enregistrement dans l'espace ProdIA (portail connecté) -->
+        <div class="save-box" id="saveBox" style="display:none">
+          <div class="save-inner">
+            <b>Vous êtes connecté à votre espace ProdIA</b>
+            <p class="sub">Enregistrez cet audit : il sera ajouté à votre suivi mensuel (score, gains, ROI) et comparé au mois précédent.</p>
+            <div class="row">
+              <input type="text" id="save-site" placeholder="Nom du site (ex. Atelier Dupont — Paris)">
+              <button class="btn btn-or" id="btnSave">Enregistrer dans mon espace</button>
+            </div>
+            <div class="report-err" id="save-err"></div>
+            <div class="report-ok" id="save-ok">Audit enregistré ! Votre courbe d'évolution est à jour.</div>
+          </div>
+        </div>
 
         <div class="methode">
           <b>Comment sont calculés vos gains ?</b><br>
@@ -964,6 +985,103 @@ footer{background:var(--petrole-nuit);color:rgba(250,247,240,.75);border-top:3px
       resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
+
+  /* ---------- Plan d'action structuré (JSON pour le portail) ---------- */
+  function construirePlanJSON() {
+    var faibles = [], moyens = [], bons = [];
+    AXES.forEach(function (axe) {
+      var sc = scoreParAxe(axe.key);
+      var tier = tierAxe(sc);
+      var bloc = tier === 'faible' ? faibles : (tier === 'moyen' ? moyens : bons);
+      bloc.push(axe);
+    });
+    function items(axes, palette, tier, max) {
+      var out = [];
+      axes.forEach(function (axe) {
+        var bloc = (palette[axe.key] && palette[axe.key][tier]) || [];
+        bloc.slice(0, max).forEach(function (action) {
+          out.push({ axe: axe.label, action: action });
+        });
+      });
+      return out;
+    }
+    return {
+      "30j": items(faibles, PLANS, 'faible', 3),
+      "60j": items(moyens, PLANS, 'moyen', 2),
+      "90j": items(bons, PLANS, 'bon', 2)
+    };
+  }
+
+  /* ---------- Enregistrement dans l'espace ProdIA (portail connecté) ---------- */
+  function tokenPortail() {
+    try {
+      var t = localStorage.getItem('portail_token');
+      if (t) return t;
+    } catch (e) {}
+    var m = location.search.match(/[?&]token=([^&]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  var saveBox = document.getElementById('saveBox');
+  var saveSite = document.getElementById('save-site');
+  if (tokenPortail()) {
+    saveBox.style.display = 'block';
+    var ent = '';
+    try { ent = localStorage.getItem(LS_ENTREPRISE) || ''; } catch (e) {}
+    if (ent) saveSite.value = ent;
+  }
+
+  document.getElementById('btnSave').addEventListener('click', function () {
+    var err = document.getElementById('save-err');
+    var ok = document.getElementById('save-ok');
+    err.classList.remove('show');
+    ok.classList.remove('show');
+    var site = saveSite.value.trim();
+    if (!site) { err.textContent = 'Merci d\u2019indiquer le nom du site.'; err.classList.add('show'); return; }
+    var c = chiffres();
+    var btn = document.getElementById('btnSave');
+    btn.disabled = true;
+    btn.textContent = 'Enregistrement…';
+    var payload = {
+      site_name: site,
+      date: new Date().toISOString().slice(0, 10),
+      score_global: scoreGlobal(),
+      score_axes: (function () {
+        var o = {};
+        AXES.forEach(function (axe) { o[axe.key] = scoreParAxe(axe.key); });
+        return o;
+      })(),
+      gains_annuels_euros: c.gains,
+      cout_outils_annuel: c.coutAn,
+      roi: c.roi,
+      plan_action: construirePlanJSON(),
+      formule: 'Pro'
+    };
+    var apiBase = (window.PORTAIL_API || '').replace(/\/$/, '');
+    fetch((apiBase || '') + '/api/audits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tokenPortail() },
+      body: JSON.stringify(payload)
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (d) { throw new Error(d.detail || 'Erreur'); });
+      return r.json();
+    }).then(function () {
+      ok.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer dans mon espace';
+      btn.style.display = 'none';
+      saveSite.disabled = true;
+      setTimeout(function () {
+        var retour = (apiBase || '') + '/';
+        try { location.href = retour + '?biz=prodia'; } catch (e2) {}
+      }, 1600);
+    }).catch(function (e) {
+      err.textContent = 'Échec de l\u2019enregistrement : ' + e.message + '. Réessayez, ou connectez-vous depuis votre espace.';
+      err.classList.add('show');
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer dans mon espace';
+    });
+  });
 
   /* ---------- Export PDF (impression) ---------- */
   function construireRapport() {
